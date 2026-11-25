@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>효도도시락 - 식사 완료 안부 알림</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+    body {
+      margin: 0; padding: 20px; background: #f6f8f5; color: #1f2937;
+      display: flex; justify-content: center; align-items: center; min-height: 100vh;
+    }
+    .card {
+      width: 100%; max-width: 420px; background: #ffffff; border-radius: 24px;
+      padding: 28px 22px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); text-align: center;
+    }
+    .badge {
+      display: inline-block; background: #dcfce7; color: #15803d;
+      font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; margin-bottom: 14px;
+    }
+    h1 { font-size: 26px; margin: 0 0 8px; color: #111827; }
+    .sub { font-size: 15px; color: #4b5563; margin: 0 0 20px; line-height: 1.5; }
+    .status-box {
+      background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px;
+      padding: 14px; font-size: 15px; font-weight: 600; color: #166534; margin-bottom: 22px;
+    }
+    .section-title { font-size: 15px; font-weight: 700; text-align: left; margin: 0 0 10px; color: #374151; }
+    .preset-grid { display: grid; gap: 10px; margin-bottom: 16px; }
+    .preset-btn {
+      width: 100%; padding: 15px; border: 1.5px solid #d1d5db; border-radius: 14px;
+      background: #ffffff; font-size: 16px; font-weight: 600; color: #1f2937;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .preset-btn:active { background: #ecfdf5; border-color: #16a34a; transform: scale(0.98); }
+    .input-group { display: flex; gap: 8px; margin-top: 8px; }
+    input[type="text"] {
+      flex: 1; padding: 14px; border: 1.5px solid #d1d5db; border-radius: 12px;
+      font-size: 15px; outline: none;
+    }
+    input[type="text"]:focus { border-color: #16a34a; }
+    .send-btn {
+      padding: 14px 18px; border: none; border-radius: 12px;
+      background: #16a34a; color: #ffffff; font-size: 15px; font-weight: 700; cursor: pointer;
+    }
+    .send-btn:disabled { background: #9ca3af; }
+    .toast { margin-top: 14px; font-size: 14px; color: #15803d; font-weight: 600; min-height: 20px; }
+    .footer { margin-top: 20px; font-size: 12px; color: #9ca3af; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">실시간 MVP 시연 중</div>
+    <h1>🍚 아침 식사 완료!</h1>
+    <p class="sub">도시락 바닥 QR을 인식했습니다.<br>자녀(발표자)에게 안부 알림을 보냅니다.</p>
+
+    <div id="autoStatus" class="status-box">⏳ 자녀 폰으로 식사 완료 알림 전송 중...</div>
+
+    <p class="section-title">자녀에게 전할 한마디 (눌러서 테스트해 보세요)</p>
+    <div class="preset-grid">
+      <button class="preset-btn" onclick="sendCustom('오늘 아침 맛있게 다 먹었어 😊')">😊 맛있게 다 먹었어</button>
+      <button class="preset-btn" onclick="sendCustom('조금 남겼지만 속은 편해 🍵')">🍵 조금 남겼지만 괜찮아</button>
+      <button class="preset-btn" onclick="sendCustom('시간 될 때 전화 한 통 줘 📞')">📞 시간 될 때 전화해 줘</button>
+    </div>
+
+    <div class="input-group">
+      <input id="customInput" type="text" placeholder="직접 메시지 입력 (예: 심사위원입니다)" />
+      <button id="sendBtn" class="send-btn" onclick="sendTyped()">전송</button>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <div class="footer">창업경진대회 발표 시연용 프로토타입</div>
+  </div>
+
+  <script>
+    // ▼ 1단계에서 ntfy 앱에 구독한 나만의 토픽 이름으로 반드시 변경하세요!
+    const TOPIC_NAME = "heoseonbum";
+
+    function getCurrentTime() {
+      return new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    async function pushToPhone(title, message, tags) {
+      const res = await fetch("https://ntfy.sh", {
+        method: "POST",
+        body: JSON.stringify({
+          topic: TOPIC_NAME,
+          title: title,
+          message: message,
+          priority: 4,
+          tags: tags
+        })
+      });
+      return res.ok;
+    }
+
+    // 1) QR을 찍어 페이지가 열리자마자 자동으로 '식사 완료' 알림 발송
+    window.addEventListener("DOMContentLoaded", async () => {
+      const statusEl = document.getElementById("autoStatus");
+      const time = getCurrentTime();
+      try {
+        const ok = await pushToPhone(
+          "[아침 식사 완료] 부모님 안부 알림",
+          `어르신께서 ${time}에 도시락을 비우고 QR을 스캔하셨습니다.`,
+          ["rice"]
+        );
+        if (ok) {
+          statusEl.textContent = `✅ 자녀 폰으로 식사 완료 알림 전송 완료 (${time})`;
+        } else {
+          statusEl.textContent = "⚠️ 전송에 실패했습니다. 아래 버튼을 눌러주세요.";
+        }
+      } catch (e) {
+        statusEl.textContent = "⚠️ 네트워크 상태를 확인해 주세요.";
+      }
+    });
+
+    // 2) 프리셋 버튼 클릭 시 추가 텍스트 알림 발송
+    async function sendCustom(text) {
+      const toast = document.getElementById("toast");
+      toast.textContent = "전송 중...";
+      const ok = await pushToPhone(
+        "[부모님 한마디 도착]",
+        `"${text}" (${getCurrentTime()})`,
+        ["speech_balloon"]
+      );
+      toast.textContent = ok ? `✅ "${text}" 메시지가 발표자 폰으로 전송되었습니다!` : "전송 실패";
+    }
+
+    // 3) 심사위원이 직접 텍스트 입력 후 전송
+    async function sendTyped() {
+      const input = document.getElementById("customInput");
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      await sendCustom(text);
+    }
+  </script>
+</body>
+</html>
